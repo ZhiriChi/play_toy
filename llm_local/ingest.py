@@ -3,15 +3,40 @@ import re
 from pathlib import Path
 
 
+def _extract_pdf(path: Path) -> tuple[str, str]:
+    """Try multiple PDF backends in order. Returns (text, backend_used)."""
+    try:
+        import pdfplumber
+        with pdfplumber.open(str(path)) as pdf:
+            text = "\n\n".join((p.extract_text() or "") for p in pdf.pages)
+        if text.strip():
+            return text, "pdfplumber"
+    except Exception:
+        pass
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(path))
+        text = "\n\n".join((p.extract_text() or "") for p in reader.pages)
+        if text.strip():
+            return text, "pypdf"
+    except Exception:
+        pass
+    return "", "none"
+
+
 def parse_file(path: str | Path) -> str:
     p = Path(path)
     ext = p.suffix.lower()
     if ext in (".txt", ".md", ".markdown"):
         return p.read_text(encoding="utf-8", errors="ignore")
     if ext == ".pdf":
-        from pypdf import PdfReader
-        reader = PdfReader(str(p))
-        return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+        text, backend = _extract_pdf(p)
+        if not text.strip():
+            raise ValueError(
+                "PDF 无法抽取文字 — 大概率是扫描版(图片型)。"
+                "请先用 OCR 工具(Adobe Acrobat / WPS / ocrmypdf)转成文字版,再上传。"
+            )
+        return text
     if ext in (".docx",):
         import docx
         d = docx.Document(str(p))

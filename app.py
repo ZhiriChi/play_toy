@@ -211,7 +211,13 @@ with tab_docs:
             with st.spinner(f"处理 {f.name} …"):
                 try:
                     info = pipe.ingest(target)
-                    st.success(f"✅ {f.name}: {info['n_chunks']} 个片段已索引")
+                    if info.get("n_chunks", 0) == 0:
+                        st.warning(
+                            f"⚠️ {f.name}: 0 个片段 — 文件没有抽出任何文字,"
+                            "可能是空文档或纯图片扫描版。试试用 OCR 转成文字版再上传。"
+                        )
+                    else:
+                        st.success(f"✅ {f.name}: {info['n_chunks']} 个片段已索引")
                 except Exception as e:
                     st.error(f"❌ {f.name}: {e}")
 
