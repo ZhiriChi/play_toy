@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.DS_Store
+
+data/uploads/
+data/vector_store/
+data/monitoring.db
+data/*.db-journal
