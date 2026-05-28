@@ -12,7 +12,7 @@ from pathlib import Path
 import chromadb
 from chromadb.config import Settings
 
-from .ingest import chunk_id_for, chunk_text, doc_id_for, parse_file
+from .ingest import chunk_id_for, chunk_text, doc_id_for, extract_document
 from .layer1_base import OllamaClient
 from .storage import Storage
 
@@ -38,8 +38,16 @@ class RAGLayer:
         return self.client.embed(texts, model=self.embed_model)
 
     def ingest_path(self, path: str | Path) -> dict:
-        text = parse_file(path)
-        return self.ingest_text(Path(path).name, text, source=str(path))
+        ocr_cfg = self.cfg.get("ocr", {})
+        doc = extract_document(
+            path,
+            ocr_enabled=ocr_cfg.get("enabled", True),
+            dpi=ocr_cfg.get("dpi", 200),
+        )
+        res = self.ingest_text(Path(path).name, doc["text"], source=str(path))
+        res["ocr_pages"] = doc.get("ocr_pages", 0)
+        res["method"] = doc.get("method")
+        return res
 
     def ingest_text(self, filename: str, text: str, source: str | None = None) -> dict:
         chunks = chunk_text(

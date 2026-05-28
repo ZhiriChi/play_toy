@@ -196,7 +196,7 @@ with tab_chat:
 # ============ Documents tab ============
 with tab_docs:
     st.header("材料库 — Layer 2")
-    st.caption("上传 TXT/MD/PDF/DOCX。文件只在本地处理,不会出网。")
+    st.caption("上传 TXT/MD/PDF/DOCX。扫描版 PDF 会自动 OCR 识别。文件只在本地处理,不会出网。")
 
     uploads = st.file_uploader(
         "上传材料",
@@ -214,10 +214,13 @@ with tab_docs:
                     if info.get("n_chunks", 0) == 0:
                         st.warning(
                             f"⚠️ {f.name}: 0 个片段 — 文件没有抽出任何文字,"
-                            "可能是空文档或纯图片扫描版。试试用 OCR 转成文字版再上传。"
+                            "可能是空文档。"
                         )
                     else:
-                        st.success(f"✅ {f.name}: {info['n_chunks']} 个片段已索引")
+                        msg = f"✅ {f.name}: {info['n_chunks']} 个片段已索引"
+                        if info.get("ocr_pages"):
+                            msg += f"(其中 {info['ocr_pages']} 页通过 OCR 识别)"
+                        st.success(msg)
                 except Exception as e:
                     st.error(f"❌ {f.name}: {e}")
 

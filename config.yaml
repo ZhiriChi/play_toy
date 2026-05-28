@@ -11,6 +11,10 @@ ollama:
       label: DeepSeek R1 · 推理
       reasoning: true
 
+ocr:
+  enabled: true        # 扫描版 PDF 自动 OCR(需 pip install pymupdf rapidocr-onnxruntime)
+  dpi: 200             # 渲染分辨率,越高越准但越慢
+
 rag:
   chunk_size: 500
   chunk_overlap: 80
