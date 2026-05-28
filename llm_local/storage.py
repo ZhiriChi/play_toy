@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS conversations (
     latency_ms REAL NOT NULL,
     avg_entropy REAL,
     cross_entropy REAL,
-    retrieved_chunk_ids TEXT
+    retrieved_chunk_ids TEXT,
+    model TEXT,
+    thinking TEXT
 );
 
 CREATE TABLE IF NOT EXISTS token_logs (
@@ -64,6 +66,14 @@ class Storage:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as c:
             c.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        with self._conn() as c:
+            cols = {r["name"] for r in c.execute("PRAGMA table_info(conversations)").fetchall()}
+            for col, decl in (("model", "TEXT"), ("thinking", "TEXT")):
+                if col not in cols:
+                    c.execute(f"ALTER TABLE conversations ADD COLUMN {col} {decl}")
 
     @contextmanager
     def _conn(self):
@@ -139,12 +149,15 @@ class Storage:
         cross_entropy: float | None,
         retrieved_chunk_ids: list[str],
         token_rows: list[tuple[int, str, float | None, float | None]],
+        model: str | None = None,
+        thinking: str | None = None,
     ) -> int:
         with self._conn() as c:
             cur = c.execute(
                 """INSERT INTO conversations
-                   (ts, query, response, latency_ms, avg_entropy, cross_entropy, retrieved_chunk_ids)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (ts, query, response, latency_ms, avg_entropy, cross_entropy,
+                    retrieved_chunk_ids, model, thinking)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     time.time(),
                     query,
@@ -153,6 +166,8 @@ class Storage:
                     avg_entropy,
                     cross_entropy,
                     json.dumps(retrieved_chunk_ids),
+                    model,
+                    thinking,
                 ),
             )
             cid = cur.lastrowid
@@ -181,7 +196,7 @@ class Storage:
     def recent_conversations(self, limit: int = 50) -> list[dict]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT id, ts, query, latency_ms, avg_entropy, cross_entropy FROM conversations ORDER BY ts DESC LIMIT ?",
+                "SELECT id, ts, query, latency_ms, avg_entropy, cross_entropy, model FROM conversations ORDER BY ts DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
@@ -189,7 +204,7 @@ class Storage:
     def conversations_since(self, since_ts: float) -> list[dict]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT id, ts, query, response, latency_ms, avg_entropy, cross_entropy FROM conversations WHERE ts >= ? ORDER BY ts",
+                "SELECT id, ts, query, response, latency_ms, avg_entropy, cross_entropy, model FROM conversations WHERE ts >= ? ORDER BY ts",
                 (since_ts,),
             ).fetchall()
         return [dict(r) for r in rows]

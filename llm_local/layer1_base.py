@@ -44,21 +44,22 @@ def _entropy_from_top(top: list[dict]) -> float | None:
 
 
 class OllamaClient:
-    def __init__(self, host: str, model: str, timeout_s: int = 120):
+    def __init__(self, host: str, default_model: str, timeout_s: int = 180):
         self.host = host.rstrip("/")
-        self.model = model
+        self.default_model = default_model
         self.timeout_s = timeout_s
 
     def chat(
         self,
         messages: list[dict],
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 800,
         top_logprobs: int = 5,
     ) -> LLMResponse:
         url = f"{self.host}/v1/chat/completions"
         payload = {
-            "model": self.model,
+            "model": model or self.default_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,

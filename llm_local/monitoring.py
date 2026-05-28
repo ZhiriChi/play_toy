@@ -135,6 +135,30 @@ def quality_metrics(storage: Storage, since_ts: float | None = None) -> dict:
     }
 
 
+def by_model_breakdown(storage: Storage, since_ts: float | None = None) -> list[dict]:
+    """Per-model: count, avg entropy, avg cross-entropy, avg latency."""
+    convs = storage.conversations_since(since_ts or 0)
+    buckets: dict[str, list[dict]] = {}
+    for c in convs:
+        m = c.get("model") or "unknown"
+        buckets.setdefault(m, []).append(c)
+
+    out: list[dict] = []
+    for m, rows in buckets.items():
+        ents = [r["avg_entropy"] for r in rows if r.get("avg_entropy") is not None]
+        ces = [r["cross_entropy"] for r in rows if r.get("cross_entropy") is not None]
+        lats = [r["latency_ms"] for r in rows if r.get("latency_ms") is not None]
+        out.append({
+            "model": m,
+            "n": len(rows),
+            "avg_entropy": float(np.mean(ents)) if ents else None,
+            "avg_cross_entropy": float(np.mean(ces)) if ces else None,
+            "avg_latency_ms": float(np.mean(lats)) if lats else None,
+        })
+    out.sort(key=lambda r: r["n"], reverse=True)
+    return out
+
+
 def high_uncertainty_segments(conv: dict, top_pct: float = 0.2) -> list[dict]:
     """Return tokens whose entropy is in the top X% — useful for highlighting
     where the model was least confident.

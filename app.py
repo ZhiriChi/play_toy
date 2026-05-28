@@ -15,6 +15,7 @@ import streamlit as st
 
 from llm_local import Pipeline
 from llm_local.monitoring import (
+    by_model_breakdown,
     cluster_topics,
     daily_volume,
     high_uncertainty_segments,
@@ -89,15 +90,36 @@ def render_entropy_chart(tokens: list[dict]) -> None:
 if "messages" not in st.session_state:
     st.session_state.messages = []  # list of {role, content, conv_id, meta}
 
+available_models = pipe.available_models()
+model_label_to_name = {m["label"]: m["name"] for m in available_models}
+default_model = pipe.cfg["ollama"]["default_model"]
+default_label = next(
+    (m["label"] for m in available_models if m["name"] == default_model),
+    available_models[0]["label"],
+)
+if "model_label" not in st.session_state:
+    st.session_state.model_label = default_label
+
 tab_chat, tab_docs, tab_dash = st.tabs(["💬 对话", "📁 材料库", "📊 监控 Dashboard"])
 
 # ============ Chat tab ============
 with tab_chat:
     st.title("本地 LLM · 三层架构")
-    st.caption(
-        f"模型: `{pipe.cfg['ollama']['chat_model']}` · "
-        f"嵌入: `{pipe.cfg['ollama']['embed_model']}` · 完全离线"
-    )
+
+    top_l, top_r = st.columns([3, 2])
+    with top_l:
+        st.caption(
+            f"嵌入: `{pipe.cfg['ollama']['embed_model']}` · 完全离线 · "
+            f"切换模型不会清空对话历史"
+        )
+    with top_r:
+        st.session_state.model_label = st.selectbox(
+            "🤖 当前模型",
+            list(model_label_to_name.keys()),
+            index=list(model_label_to_name.keys()).index(st.session_state.model_label),
+        )
+    active_model = model_label_to_name[st.session_state.model_label]
+    active_info = pipe.model_info(active_model) or {}
 
     docs = pipe.list_documents()
     if not docs:
@@ -109,11 +131,15 @@ with tab_chat:
             if msg["role"] == "assistant" and msg.get("meta"):
                 meta = msg["meta"]
                 conv_id = msg.get("conv_id")
-                cols = st.columns([1, 1, 1, 2])
-                cols[0].metric("平均熵", f"{meta['avg_entropy']:.2f}" if meta.get('avg_entropy') is not None else "—")
-                cols[1].metric("交叉熵", f"{meta['cross_entropy']:.2f}" if meta.get('cross_entropy') is not None else "—")
-                cols[2].metric("延迟", f"{meta['latency_ms']:.0f} ms")
-                with cols[3]:
+                if meta.get("thinking"):
+                    with st.expander("🧠 思考过程 (Reasoning)"):
+                        st.markdown(meta["thinking"])
+                cols = st.columns([1, 1, 1, 1, 2])
+                cols[0].metric("模型", meta.get("model", "—").split(":")[0])
+                cols[1].metric("平均熵", f"{meta['avg_entropy']:.2f}" if meta.get('avg_entropy') is not None else "—")
+                cols[2].metric("交叉熵", f"{meta['cross_entropy']:.2f}" if meta.get('cross_entropy') is not None else "—")
+                cols[3].metric("延迟", f"{meta['latency_ms']:.0f} ms")
+                with cols[4]:
                     if conv_id:
                         clear_key = f"clear_{conv_id}"
                         if st.button("✅ 我清楚理解了", key=clear_key, help="奖励本次用到的材料块"):
@@ -133,20 +159,26 @@ with tab_chat:
                     render_token_heatmap(meta.get("tokens", []))
                     render_entropy_chart(meta.get("tokens", []))
 
-    query = st.chat_input("提问…")
+    query = st.chat_input(f"提问…(当前: {st.session_state.model_label})")
     if query:
         st.session_state.messages.append({"role": "user", "content": query})
         with st.chat_message("user"):
             st.markdown(query)
         with st.chat_message("assistant"):
-            with st.spinner("思考中…"):
+            spinner_text = "推理中…" if active_info.get("reasoning") else "思考中…"
+            with st.spinner(spinner_text):
                 try:
-                    out = pipe.ask(query)
+                    out = pipe.ask(query, model=active_model)
                 except Exception as e:
                     st.error(f"调用失败: {e}")
                     st.stop()
+            if out.get("thinking"):
+                with st.expander("🧠 思考过程 (Reasoning)"):
+                    st.markdown(out["thinking"])
             st.markdown(out["response"])
             meta = {
+                "model": out["model"],
+                "thinking": out.get("thinking"),
                 "avg_entropy": out["avg_entropy"],
                 "cross_entropy": out["cross_entropy"],
                 "latency_ms": out["latency_ms"],
@@ -236,6 +268,21 @@ with tab_dash:
         f"{metrics['avg_latency_ms']:.0f} ms" if metrics.get("avg_latency_ms") is not None else "—",
     )
 
+    by_model = by_model_breakdown(pipe.storage, since_ts=since)
+    if by_model:
+        st.subheader("🤖 按模型对比")
+        df_bm = pd.DataFrame([
+            {
+                "模型": r["model"],
+                "问答数": r["n"],
+                "平均熵": round(r["avg_entropy"], 3) if r["avg_entropy"] is not None else None,
+                "平均交叉熵": round(r["avg_cross_entropy"], 3) if r["avg_cross_entropy"] is not None else None,
+                "平均延迟 (ms)": round(r["avg_latency_ms"], 0) if r["avg_latency_ms"] is not None else None,
+            }
+            for r in by_model
+        ])
+        st.dataframe(df_bm, use_container_width=True, hide_index=True)
+
     st.divider()
 
     left, right = st.columns(2)
@@ -247,15 +294,17 @@ with tab_dash:
             st.info("暂无历史对话。先去『对话』tab 提几个问题。")
         else:
             options = {
-                f"#{c['id']} · {datetime.fromtimestamp(c['ts']).strftime('%m-%d %H:%M')} · {c['query'][:30]}": c["id"]
+                f"#{c['id']} · {datetime.fromtimestamp(c['ts']).strftime('%m-%d %H:%M')} · "
+                f"[{(c.get('model') or '?').split(':')[0]}] · {c['query'][:30]}": c["id"]
                 for c in recents
             }
             picked = st.selectbox("选择一次对话", list(options.keys()))
             conv = pipe.storage.get_conversation(options[picked])
             if conv:
-                c1, c2 = st.columns(2)
-                c1.metric("avg entropy", f"{conv['avg_entropy']:.3f}" if conv.get("avg_entropy") is not None else "—")
-                c2.metric("cross entropy", f"{conv['cross_entropy']:.3f}" if conv.get("cross_entropy") is not None else "—")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("model", (conv.get("model") or "—").split(":")[0])
+                c2.metric("avg entropy", f"{conv['avg_entropy']:.3f}" if conv.get("avg_entropy") is not None else "—")
+                c3.metric("cross entropy", f"{conv['cross_entropy']:.3f}" if conv.get("cross_entropy") is not None else "—")
                 render_entropy_chart(conv.get("tokens") or [])
                 with st.expander("高不确定性 token (top 20%)"):
                     seg = high_uncertainty_segments(conv, top_pct=0.2)

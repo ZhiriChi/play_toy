@@ -1,8 +1,15 @@
 ollama:
   host: http://localhost:11434
-  chat_model: qwen2.5:7b
   embed_model: bge-m3
-  request_timeout_s: 120
+  request_timeout_s: 180
+  default_model: qwen2.5:7b
+  models:
+    - name: qwen2.5:7b
+      label: Qwen 2.5 · 通用对话
+      reasoning: false
+    - name: deepseek-r1:7b
+      label: DeepSeek R1 · 推理
+      reasoning: true
 
 rag:
   chunk_size: 500
