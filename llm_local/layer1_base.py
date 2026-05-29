@@ -57,48 +57,27 @@ class OllamaClient:
         max_tokens: int = 800,
         top_logprobs: int = 5,
     ) -> LLMResponse:
-        url = f"{self.host}/v1/chat/completions"
+        url = f"{self.host}/api/chat"
         payload = {
             "model": model or self.default_model,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
         }
-        if top_logprobs and top_logprobs > 0:
-            payload["logprobs"] = True
-            payload["top_logprobs"] = top_logprobs
         r = requests.post(url, json=payload, timeout=self.timeout_s)
         if not r.ok:
             raise RuntimeError(f"Ollama 调用失败 ({r.status_code}): {r.text[:300]}")
         data = r.json()
-        choice = data["choices"][0]
-        text = choice["message"]["content"] or ""
-
-        tokens: list[TokenInfo] = []
-        chosen_logprobs: list[float] = []
-        entropies: list[float] = []
-
-        lp = choice.get("logprobs") or {}
-        content = lp.get("content") or []
-        for i, item in enumerate(content):
-            tok = item.get("token", "")
-            clp = item.get("logprob")
-            ent = _entropy_from_top(item.get("top_logprobs") or [])
-            tokens.append(TokenInfo(position=i, token=tok, chosen_logprob=clp, entropy=ent))
-            if clp is not None:
-                chosen_logprobs.append(clp)
-            if ent is not None:
-                entropies.append(ent)
-
-        avg_ent = (sum(entropies) / len(entropies)) if entropies else None
-        ce = (-sum(chosen_logprobs) / len(chosen_logprobs)) if chosen_logprobs else None
+        text = (data.get("message") or {}).get("content") or ""
 
         return LLMResponse(
             text=text,
-            tokens=tokens,
-            avg_entropy=avg_ent,
-            cross_entropy=ce,
+            tokens=[],
+            avg_entropy=None,
+            cross_entropy=None,
             raw=data,
         )
 
