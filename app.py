@@ -68,7 +68,7 @@ def render_token_heatmap(tokens: list[dict]) -> None:
     st.markdown("".join(html_parts), unsafe_allow_html=True)
 
 
-def render_entropy_chart(tokens: list[dict]) -> None:
+def render_entropy_chart(tokens: list[dict], key: str | None = None) -> None:
     df = pd.DataFrame([
         {"position": t["position"], "token": t["token"], "entropy": t.get("entropy") or 0,
          "logprob": t.get("chosen_logprob")}
@@ -84,7 +84,7 @@ def render_entropy_chart(tokens: list[dict]) -> None:
         title="每个 token 的熵 (entropy)",
     )
     fig.update_layout(height=260, margin=dict(l=10, r=10, t=40, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=key)
 
 
 if "messages" not in st.session_state:
@@ -157,7 +157,7 @@ with tab_chat:
 
                 with st.expander("🌡️ Token 熵 热力图"):
                     render_token_heatmap(meta.get("tokens", []))
-                    render_entropy_chart(meta.get("tokens", []))
+                    render_entropy_chart(meta.get("tokens", []), key=f"chat_ent_{conv_id}")
 
     query = st.chat_input(f"提问…(当前: {st.session_state.model_label})")
     if query:
@@ -314,7 +314,7 @@ with tab_dash:
                 c1.metric("model", (conv.get("model") or "—").split(":")[0])
                 c2.metric("avg entropy", f"{conv['avg_entropy']:.3f}" if conv.get("avg_entropy") is not None else "—")
                 c3.metric("cross entropy", f"{conv['cross_entropy']:.3f}" if conv.get("cross_entropy") is not None else "—")
-                render_entropy_chart(conv.get("tokens") or [])
+                render_entropy_chart(conv.get("tokens") or [], key=f"dash_ent_{conv['id']}")
                 with st.expander("高不确定性 token (top 20%)"):
                     seg = high_uncertainty_segments(conv, top_pct=0.2)
                     if seg:
@@ -331,7 +331,7 @@ with tab_dash:
         df = pd.DataFrame(vol)
         fig = px.line(df, x="date", y="count", markers=True)
         fig.update_layout(height=300, margin=dict(l=10, r=10, t=20, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="dash_daily_volume")
 
         st.subheader("🔥 高频 token (问题中)")
         toks = top_tokens(pipe.storage, since_ts=since, n=20)
@@ -340,7 +340,7 @@ with tab_dash:
             fig = px.bar(df_t, x="count", y="token", orientation="h")
             fig.update_layout(height=400, margin=dict(l=10, r=10, t=10, b=10),
                               yaxis={"categoryorder": "total ascending"})
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="dash_top_tokens")
         else:
             st.caption("数据不足。")
 
@@ -366,7 +366,7 @@ with tab_dash:
         df_topic = pd.DataFrame(topics)
         fig = go.Figure(go.Pie(labels=df_topic["label"], values=df_topic["count"], hole=0.4))
         fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="dash_topic_pie")
         for t in topics:
             with st.expander(f"{t['label']}  ·  {t['count']} 条"):
                 for s in t.get("samples", []):
