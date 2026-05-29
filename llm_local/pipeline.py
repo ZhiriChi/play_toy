@@ -61,16 +61,17 @@ class Pipeline:
 
         t0 = time.time()
         hits = self.rag.retrieve(query)
-        context = self.rag.build_context_block(hits)
 
-        system_prompt = self.cfg["generation"]["system_prompt"].strip()
-        # Some local quantized models on Turing GPUs crash when given a
-        # separate `system` role message — merge it into the user message.
-        user_content = (
-            f"{system_prompt}\n\n"
-            f"参考材料:\n{context}\n\n"
-            f"用户问题:\n{query}"
-        )
+        # Keep the prompt minimal — on some GPUs (e.g. RTX 2070 on current
+        # Ollama) long multi-line Chinese system blocks produce numerically
+        # unstable logits and the model degrades into garbage. We add only the
+        # retrieved materials, when present, and let the instruct-tuned model
+        # handle the rest from the bare user query.
+        if hits:
+            context = self.rag.build_context_block(hits)
+            user_content = f"参考资料:\n{context}\n\n问题: {query}"
+        else:
+            user_content = query
         messages = [{"role": "user", "content": user_content}]
         resp = self.client.chat(
             messages=messages,
