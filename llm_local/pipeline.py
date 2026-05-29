@@ -63,13 +63,15 @@ class Pipeline:
         hits = self.rag.retrieve(query)
         context = self.rag.build_context_block(hits)
 
-        messages = [
-            {"role": "system", "content": self.cfg["generation"]["system_prompt"]},
-            {
-                "role": "user",
-                "content": f"参考材料:\n{context}\n\n用户问题:\n{query}",
-            },
-        ]
+        system_prompt = self.cfg["generation"]["system_prompt"].strip()
+        # Some local quantized models on Turing GPUs crash when given a
+        # separate `system` role message — merge it into the user message.
+        user_content = (
+            f"{system_prompt}\n\n"
+            f"参考材料:\n{context}\n\n"
+            f"用户问题:\n{query}"
+        )
+        messages = [{"role": "user", "content": user_content}]
         resp = self.client.chat(
             messages=messages,
             model=use_model,

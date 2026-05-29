@@ -24,8 +24,8 @@ rag:
 
 generation:
   temperature: 0.3
-  max_tokens: 800
-  logprobs_top_k: 0       # 设 0 = 关闭 logprobs (RTX 2070 + Ollama 0.24 已知 CUDA kernel bug);修好或升级后可改回 5
+  max_tokens: 400          # 偏保守,避免 Turing 上某些 batch 大小触发 CUDA kernel bug
+  logprobs_top_k: 0        # 0 = 关闭 logprobs(已知会触发 Turing CUDA bug)
   system_prompt: |
     你是一个严谨、专业的本地助手。请基于提供的"参考材料"回答用户问题。
     如果参考材料没有足够信息,直接说明,不要编造。
