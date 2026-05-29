@@ -63,10 +63,11 @@ class OllamaClient:
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "logprobs": True,
-            "top_logprobs": top_logprobs,
             "stream": False,
         }
+        if top_logprobs and top_logprobs > 0:
+            payload["logprobs"] = True
+            payload["top_logprobs"] = top_logprobs
         r = requests.post(url, json=payload, timeout=self.timeout_s)
         if not r.ok:
             raise RuntimeError(f"Ollama 调用失败 ({r.status_code}): {r.text[:300]}")
