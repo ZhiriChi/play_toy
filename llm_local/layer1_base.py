@@ -6,6 +6,7 @@ approximate cross-entropy of the response — both feed the monitoring layer.
 """
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
 
@@ -48,6 +49,21 @@ class OllamaClient:
         self.host = host.rstrip("/")
         self.default_model = default_model
         self.timeout_s = timeout_s
+        # Match the byte-for-byte shape of `curl` requests: raw UTF-8 (no
+        # \uXXXX escapes), no gzip, no kept-alive connection from previous
+        # calls. Some Ollama + GPU combos produce wrong logits when given
+        # ASCII-escaped Chinese, presumably because the parser/tokenizer takes
+        # a different path.
+        self._headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Accept": "application/json",
+            "Accept-Encoding": "identity",
+            "Connection": "close",
+        }
+
+    def _post(self, url: str, payload: dict) -> requests.Response:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        return requests.post(url, data=body, headers=self._headers, timeout=self.timeout_s)
 
     def chat(
         self,
@@ -67,7 +83,7 @@ class OllamaClient:
                 "num_predict": max_tokens,
             },
         }
-        r = requests.post(url, json=payload, timeout=self.timeout_s)
+        r = self._post(url, payload)
         if not r.ok:
             raise RuntimeError(f"Ollama 调用失败 ({r.status_code}): {r.text[:300]}")
         data = r.json()
@@ -83,7 +99,7 @@ class OllamaClient:
 
     def embed(self, texts: list[str], model: str) -> list[list[float]]:
         url = f"{self.host}/api/embed"
-        r = requests.post(url, json={"model": model, "input": texts}, timeout=self.timeout_s)
+        r = self._post(url, {"model": model, "input": texts})
         if not r.ok:
             raise RuntimeError(f"Ollama embed 失败 ({r.status_code}): {r.text[:300]}")
         data = r.json()
