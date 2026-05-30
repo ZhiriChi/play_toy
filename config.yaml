@@ -1,6 +1,6 @@
 ollama:
   host: http://localhost:11434
-  embed_model: bge-m3
+  embed_model: mxbai-embed-large   # bge-m3 在 Turing GPU 上偶尔产生 NaN embedding,mxbai 更稳
   request_timeout_s: 180
   default_model: qwen2.5:7b
   models:

@@ -7,6 +7,7 @@ marks an answer as "clearly understood" (Layer 3). Retrieval re-ranks by
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 
 import chromadb
@@ -32,10 +33,43 @@ class RAGLayer:
         )
         self.embed_model = cfg["ollama"]["embed_model"]
 
+    @staticmethod
+    def _is_embeddable(text: str) -> bool:
+        # Skip blank / punctuation-only chunks that some embedding models
+        # (e.g. bge-m3 on Turing) return NaN for.
+        if not text or len(text.strip()) < 3:
+            return False
+        return bool(re.search(r"[\w一-鿿]", text))
+
+    @staticmethod
+    def _embedding_is_finite(vec: list[float]) -> bool:
+        return all(math.isfinite(v) for v in vec) and any(v != 0.0 for v in vec)
+
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        return self.client.embed(texts, model=self.embed_model)
+        # First try the whole batch; if that fails or any vec is NaN, fall back
+        # to per-text embedding so one bad chunk can't kill the upload.
+        try:
+            vecs = self.client.embed(texts, model=self.embed_model)
+            if len(vecs) == len(texts) and all(self._embedding_is_finite(v) for v in vecs):
+                return vecs
+        except Exception:
+            pass
+
+        out: list[list[float]] = []
+        for t in texts:
+            try:
+                v = self.client.embed([t], model=self.embed_model)
+                vec = v[0] if v else []
+                if vec and self._embedding_is_finite(vec):
+                    out.append(vec)
+                    continue
+            except Exception:
+                pass
+            # Fallback: zero vector so the chunk still has a slot but won't match anything.
+            out.append([0.0] * (len(out[0]) if out else 1024))
+        return out
 
     def ingest_path(self, path: str | Path) -> dict:
         ocr_cfg = self.cfg.get("ocr", {})
@@ -50,11 +84,12 @@ class RAGLayer:
         return res
 
     def ingest_text(self, filename: str, text: str, source: str | None = None) -> dict:
-        chunks = chunk_text(
+        raw_chunks = chunk_text(
             text,
             chunk_size=self.cfg["rag"]["chunk_size"],
             overlap=self.cfg["rag"]["chunk_overlap"],
         )
+        chunks = [c for c in raw_chunks if self._is_embeddable(c)]
         if not chunks:
             return {"doc_id": None, "n_chunks": 0, "filename": filename}
 
