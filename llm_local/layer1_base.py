@@ -71,10 +71,12 @@ class OllamaClient:
         model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 800,
-        top_logprobs: int = 5,
+        top_logprobs: int = 5,  # kept for API compatibility; /api/chat doesn't support logprobs
     ) -> LLMResponse:
+        # Use native /api/chat — the OpenAI-compat /v1/chat/completions endpoint crashes
+        # with CUDA illegal memory access on Ollama 0.24 + RTX 2070 (Turing SM 7.5).
         url = f"{self.host}/api/chat"
-        payload = {
+        payload: dict = {
             "model": model or self.default_model,
             "messages": messages,
             "stream": False,
@@ -89,6 +91,7 @@ class OllamaClient:
         data = r.json()
         text = (data.get("message") or {}).get("content") or ""
 
+        # /api/chat doesn't expose per-token logprobs; entropy metrics will be None.
         return LLMResponse(
             text=text,
             tokens=[],

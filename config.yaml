@@ -1,19 +1,23 @@
 ollama:
   host: http://localhost:11434
-  embed_model: mxbai-embed-large   # bge-m3 在 Turing GPU 上偶尔产生 NaN embedding,mxbai 更稳
+  embed_model: mxbai-embed-large  # unused when embedding.backend = sentence-transformers
   request_timeout_s: 180
   default_model: qwen2.5:7b
   models:
     - name: qwen2.5:7b
-      label: Qwen 2.5 · 通用对话
+      label: Qwen 2.5 · 通用
       reasoning: false
-    - name: deepseek-r1:7b
+    - name: deepseek-r1:8b
       label: DeepSeek R1 · 推理
       reasoning: true
 
+embedding:
+  backend: sentence-transformers   # "ollama" | "sentence-transformers"
+  st_model: paraphrase-multilingual-MiniLM-L12-v2   # ~120 MB, CPU, 中英双语
+
 ocr:
   enabled: true        # 扫描版 PDF 自动 OCR(需 pip install pymupdf rapidocr-onnxruntime)
-  dpi: 200             # 渲染分辨率,越高越准但越慢
+  dpi: 150             # 渲染分辨率,越高越准但越慢
 
 rag:
   chunk_size: 500

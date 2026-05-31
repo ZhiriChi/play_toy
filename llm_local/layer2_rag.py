@@ -33,6 +33,14 @@ class RAGLayer:
         )
         self.embed_model = cfg["ollama"]["embed_model"]
 
+        embed_cfg = cfg.get("embedding", {})
+        self._embed_backend = embed_cfg.get("backend", "ollama")
+        self._st_model = None
+        if self._embed_backend == "sentence-transformers":
+            from sentence_transformers import SentenceTransformer
+            st_name = embed_cfg.get("st_model", "paraphrase-multilingual-MiniLM-L12-v2")
+            self._st_model = SentenceTransformer(st_name, device="cpu")
+
     @staticmethod
     def _is_embeddable(text: str) -> bool:
         # Skip blank / punctuation-only chunks that some embedding models
@@ -48,8 +56,10 @@ class RAGLayer:
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        # First try the whole batch; if that fails or any vec is NaN, fall back
-        # to per-text embedding so one bad chunk can't kill the upload.
+        if self._embed_backend == "sentence-transformers":
+            vecs = self._st_model.encode(texts, normalize_embeddings=True)
+            return vecs.tolist()
+        # Ollama path: try batch first; fall back to per-text on NaN/error.
         try:
             vecs = self.client.embed(texts, model=self.embed_model)
             if len(vecs) == len(texts) and all(self._embedding_is_finite(v) for v in vecs):
@@ -67,7 +77,6 @@ class RAGLayer:
                     continue
             except Exception:
                 pass
-            # Fallback: zero vector so the chunk still has a slot but won't match anything.
             out.append([0.0] * (len(out[0]) if out else 1024))
         return out
 

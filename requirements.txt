@@ -11,3 +11,4 @@ pandas>=2.1
 streamlit>=1.32
 plotly>=5.20
 scikit-learn>=1.4
+sentence-transformers>=3.0
