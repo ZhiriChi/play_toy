@@ -29,7 +29,7 @@ rag:
 generation:
   temperature: 0.3
   max_tokens: 1500         # 给 4 段结构足够展开空间
-  num_ctx: 2048            # RoPE CUDA kernel 在 Turing SM7.5 上 ctx>=4096 时越界崩溃
+  num_ctx: 4096            # RoPE CUDA bug 仅限 num_gpu>0; num_gpu=0 纯 CPU 无此限制
   num_gpu: 0               # Q4_K_M+Turing 全 GPU dequant kernel bug; 0=CPU 稳定 ~6tok/s
                            # 换成 qwen2.5:7b-instruct-q4_0 后可改回 29
   keep_alive: 600          # 模型加载一次后保持10分钟,避免每次请求重新加载30s
