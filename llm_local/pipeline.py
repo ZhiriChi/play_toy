@@ -69,9 +69,23 @@ class Pipeline:
         # handle the rest from the bare user query.
         if hits:
             context = self.rag.build_context_block(hits)
-            user_content = f"参考资料:\n{context}\n\n问题: {query}"
+            user_content = (
+                f"参考资料:\n{context}\n\n问题: {query}\n\n"
+                f"请按以下结构详细回答:\n"
+                f"1. 直接回答(2-3 句)\n"
+                f"2. 详细解释(展开关键概念,给具体例子)\n"
+                f"3. 相关延伸 — 用户接下来可能想了解的 1-2 个相关问题及简答\n"
+                f"4. 实用建议或注意事项"
+            )
         else:
-            user_content = query
+            user_content = (
+                f"问题: {query}\n\n"
+                f"请按以下结构详细回答:\n"
+                f"1. 直接回答\n"
+                f"2. 详细解释和例子\n"
+                f"3. 用户接下来可能想了解的相关问题及简答\n"
+                f"4. 实用建议"
+            )
         messages = [{"role": "user", "content": user_content}]
         gen = self.cfg["generation"]
         resp = self.client.chat(

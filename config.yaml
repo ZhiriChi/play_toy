@@ -2,9 +2,9 @@ ollama:
   host: http://localhost:11434
   embed_model: mxbai-embed-large  # unused when embedding.backend = sentence-transformers
   request_timeout_s: 180
-  default_model: qwen2.5:7b
+  default_model: qwen2.5:7b-instruct-q4_0
   models:
-    - name: qwen2.5:7b
+    - name: qwen2.5:7b-instruct-q4_0
       label: Qwen 2.5 · 通用
       reasoning: false
     - name: deepseek-r1:8b
@@ -28,7 +28,7 @@ rag:
 
 generation:
   temperature: 0.3
-  max_tokens: 300          # 偏保守,避免 Turing 上某些 batch 大小触发 CUDA kernel bug
+  max_tokens: 1500         # 给 4 段结构足够展开空间
   num_ctx: 2048            # RoPE CUDA kernel 在 Turing SM7.5 上 ctx>=4096 时越界崩溃
   num_gpu: 0               # Q4_K_M+Turing 全 GPU dequant kernel bug; 0=CPU 稳定 ~6tok/s
                            # 换成 qwen2.5:7b-instruct-q4_0 后可改回 29
