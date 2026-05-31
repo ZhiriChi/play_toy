@@ -1,7 +1,7 @@
 ollama:
   host: http://localhost:11434
   embed_model: mxbai-embed-large  # unused when embedding.backend = sentence-transformers
-  request_timeout_s: 180
+  request_timeout_s: 600   # CPU 推理较慢,给 10 分钟避免长回答被 HTTP 超时掐断
   default_model: qwen2.5:7b-instruct-q4_0
   models:
     - name: qwen2.5:7b-instruct-q4_0
