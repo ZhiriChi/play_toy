@@ -4,6 +4,7 @@ Run:  streamlit run app.py
 """
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -87,6 +88,29 @@ def render_entropy_chart(tokens: list[dict], key: str | None = None) -> None:
     st.plotly_chart(fig, use_container_width=True, key=key)
 
 
+# LLMs emit math as LaTeX with \( \) / \[ \] delimiters (and sometimes ```latex
+# fences). Streamlit's KaTeX only renders $...$ / $$...$$, so without this the
+# user sees raw LaTeX source instead of typeset formulas. Normalize the
+# delimiters before handing the text to st.markdown.
+_MATH_FENCE = re.compile(r"```(?:math|latex|tex)\s*\n?(.+?)```", re.DOTALL | re.IGNORECASE)
+_MATH_BLOCK = re.compile(r"\\\[(.+?)\\\]", re.DOTALL)
+_MATH_INLINE = re.compile(r"\\\((.+?)\\\)", re.DOTALL)
+
+
+def _normalize_math(text: str) -> str:
+    if not text:
+        return text
+    text = _MATH_FENCE.sub(lambda m: f"\n$$\n{m.group(1).strip()}\n$$\n", text)
+    text = _MATH_BLOCK.sub(lambda m: f"\n$$\n{m.group(1).strip()}\n$$\n", text)
+    text = _MATH_INLINE.sub(lambda m: f"${m.group(1).strip()}$", text)
+    return text
+
+
+def render_md(text: str) -> None:
+    """st.markdown with LaTeX math delimiters normalized so formulas render."""
+    st.markdown(_normalize_math(text or ""))
+
+
 st.session_state.setdefault("messages", [])
 
 available_models = pipe.available_models()
@@ -125,13 +149,13 @@ with tab_chat:
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            render_md(msg["content"])
             if msg["role"] == "assistant" and msg.get("meta"):
                 meta = msg["meta"]
                 conv_id = msg.get("conv_id")
                 if meta.get("thinking"):
                     with st.expander("🧠 思考过程 (Reasoning)"):
-                        st.markdown(meta["thinking"])
+                        render_md(meta["thinking"])
                 cols = st.columns([1, 1, 1, 1, 2])
                 cols[0].metric("模型", meta.get("model", "—").split(":")[0])
                 cols[1].metric("平均熵", f"{meta['avg_entropy']:.2f}" if meta.get('avg_entropy') is not None else "—")
@@ -172,8 +196,8 @@ with tab_chat:
                     st.stop()
             if out.get("thinking"):
                 with st.expander("🧠 思考过程 (Reasoning)"):
-                    st.markdown(out["thinking"])
-            st.markdown(out["response"])
+                    render_md(out["thinking"])
+            render_md(out["response"])
             meta = {
                 "model": out["model"],
                 "thinking": out.get("thinking"),
@@ -320,7 +344,7 @@ with tab_dash:
                     else:
                         st.caption("无可用 entropy 数据。")
                 with st.expander("回答全文 + 热力图"):
-                    st.markdown(conv["response"])
+                    render_md(conv["response"])
                     render_token_heatmap(conv.get("tokens") or [])
 
     with right:
