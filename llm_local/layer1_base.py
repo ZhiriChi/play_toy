@@ -72,6 +72,9 @@ class OllamaClient:
         temperature: float = 0.3,
         max_tokens: int = 800,
         top_logprobs: int = 5,  # kept for API compatibility; /api/chat doesn't support logprobs
+        num_ctx: int = 2048,
+        num_gpu: int = 0,
+        keep_alive: int = 600,
     ) -> LLMResponse:
         # Use native /api/chat — the OpenAI-compat /v1/chat/completions endpoint crashes
         # with CUDA illegal memory access on Ollama 0.24 + RTX 2070 (Turing SM 7.5).
@@ -80,9 +83,16 @@ class OllamaClient:
             "model": model or self.default_model,
             "messages": messages,
             "stream": False,
+            "keep_alive": keep_alive,
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens,
+                # RoPE CUDA kernel crashes on Turing SM7.5 with ctx>=4096.
+                "num_ctx": num_ctx,
+                # Q4_K_M dequant CUDA kernel is unstable on Turing SM7.5.
+                # num_gpu=0 forces CPU inference (~6 tok/s); switch to 29
+                # after pulling qwen2.5:7b-instruct-q4_0.
+                "num_gpu": num_gpu,
             },
         }
         r = self._post(url, payload)

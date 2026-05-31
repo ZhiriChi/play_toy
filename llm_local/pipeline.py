@@ -73,12 +73,16 @@ class Pipeline:
         else:
             user_content = query
         messages = [{"role": "user", "content": user_content}]
+        gen = self.cfg["generation"]
         resp = self.client.chat(
             messages=messages,
             model=use_model,
-            temperature=self.cfg["generation"]["temperature"],
-            max_tokens=self.cfg["generation"]["max_tokens"],
-            top_logprobs=self.cfg["generation"]["logprobs_top_k"],
+            temperature=gen["temperature"],
+            max_tokens=gen["max_tokens"],
+            top_logprobs=gen["logprobs_top_k"],
+            num_ctx=gen.get("num_ctx", 2048),
+            num_gpu=gen.get("num_gpu", 0),
+            keep_alive=gen.get("keep_alive", 600),
         )
         latency_ms = (time.time() - t0) * 1000
 

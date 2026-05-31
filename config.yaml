@@ -28,7 +28,11 @@ rag:
 
 generation:
   temperature: 0.3
-  max_tokens: 400          # 偏保守,避免 Turing 上某些 batch 大小触发 CUDA kernel bug
+  max_tokens: 300          # 偏保守,避免 Turing 上某些 batch 大小触发 CUDA kernel bug
+  num_ctx: 2048            # RoPE CUDA kernel 在 Turing SM7.5 上 ctx>=4096 时越界崩溃
+  num_gpu: 0               # Q4_K_M+Turing 全 GPU dequant kernel bug; 0=CPU 稳定 ~6tok/s
+                           # 换成 qwen2.5:7b-instruct-q4_0 后可改回 29
+  keep_alive: 600          # 模型加载一次后保持10分钟,避免每次请求重新加载30s
   logprobs_top_k: 0        # 0 = 关闭 logprobs(已知会触发 Turing CUDA bug)
   system_prompt: |
     你是一个严谨、专业的本地助手。请基于提供的"参考材料"回答用户问题。
