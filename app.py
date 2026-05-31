@@ -87,8 +87,7 @@ def render_entropy_chart(tokens: list[dict], key: str | None = None) -> None:
     st.plotly_chart(fig, use_container_width=True, key=key)
 
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []  # list of {role, content, conv_id, meta}
+st.session_state.setdefault("messages", [])
 
 available_models = pipe.available_models()
 model_label_to_name = {m["label"]: m["name"] for m in available_models}
@@ -97,8 +96,7 @@ default_label = next(
     (m["label"] for m in available_models if m["name"] == default_model),
     available_models[0]["label"],
 )
-if "model_label" not in st.session_state:
-    st.session_state.model_label = default_label
+st.session_state.setdefault("model_label", default_label)
 
 tab_chat, tab_docs, tab_dash = st.tabs(["💬 对话", "📁 材料库", "📊 监控 Dashboard"])
 
