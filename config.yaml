@@ -28,10 +28,9 @@ rag:
 
 generation:
   temperature: 0.3
-  max_tokens: 1500         # 给 4 段结构足够展开空间
-  num_ctx: 4096            # RoPE CUDA bug 仅限 num_gpu>0; num_gpu=0 纯 CPU 无此限制
-  num_gpu: 0               # Q4_K_M+Turing 全 GPU dequant kernel bug; 0=CPU 稳定 ~6tok/s
-                           # 换成 qwen2.5:7b-instruct-q4_0 后可改回 29
+  max_tokens: 800          # 输出上限 800 token；输入预算 = 2048-800 = 1248 (top_k×chunk≈1000, q≈150 ✓)
+  num_ctx: 2048            # Turing SM7.5 RoPE kernel crash zone: ctx>=4096 + num_gpu>0 → illegal mem
+  num_gpu: 29              # RTX2070 full offload; REQUIRES OLLAMA_CONTEXT_LENGTH=2048 in env (registry fixed)
   keep_alive: 600          # 模型加载一次后保持10分钟,避免每次请求重新加载30s
   logprobs_top_k: 0        # 0 = 关闭 logprobs(已知会触发 Turing CUDA bug)
   system_prompt: |
